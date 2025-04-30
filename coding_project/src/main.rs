@@ -1,39 +1,46 @@
+use std::collections::{HashMap, HashSet,VecDeque};
+use std::io::{BufReader};
+use std::fs::File;
+use csv::Reader;
 
+fn read_nodes(filename: &str) -> HashMap<usize, String> {
+    let file = File::open(filename).expect("Cannot open file");
+    let reader = BufReader::new(file);
+    let mut rdr = Reader::from_reader(reader);
 
-fn read_nodes(filename:&str) ->HashMap<usize, String>{
-    let mut rdr=ReaderBuilder::new().has_headers(true).from_path(filename)
-    .expect("Cannot open CSV file");
-
-    let mut nodes=HashMap::new();
-    for line in rdr.records(){
+    let mut nodes = HashMap::new();
+    for line in rdr.records() {
         let record = line.expect("Failed to read record");
-        let name=record[1].trim().to_string;
-        let new_id=record[2].trim().parse::<usize>().expect("Invalid new_id");
+        let name = record[1].trim().to_string(); // fix: call to_string()
+        let new_id = record[2].trim().parse::<usize>().expect("Invalid new_id");
 
         nodes.insert(new_id, name);
     }
     nodes
 }
-fn read_edges(filename:&str) ->Vec<(usize,usize)>{
-    let mut rdr=ReaderBuilder::new().has_headers(true).from_path(filename)
-    .expect("Cannot open CSV file");
 
-    let mut edges=HashMap::new();
-    for line in rdr.records(){
+fn read_edges(filename: &str) -> Vec<(usize, usize)> {
+    let file = File::open(filename).expect("Cannot open file");
+    let reader = BufReader::new(file);
+    let mut rdr = Reader::from_reader(reader);
+
+    let mut edges = Vec::new(); 
+    for line in rdr.records() {
         let record = line.expect("Failed to read record");
-        let from=record[0].trim().parse::<usize>().expect("Invalid new_id");;
-        let to=record[1].trim().parse::<usize>().expect("Invalid new_id");
+        let from = record[0].trim().parse::<usize>().expect("Invalid from ID");
+        let to = record[1].trim().parse::<usize>().expect("Invalid to ID");
 
-        edges.insert(from, to);
+        edges.push((from, to)); 
     }
     edges
 }
-fn find_connections(nodes:HashMap<usize, String>, edges:Vec<(usize,usize)>)->HashMap<usize,Vec<usize>>{
-    let connections=HashMap<usize,Vec<usize>>::new();
-    for (new_id,name) in nodes{
+
+fn find_connections(nodes:HashMap<usize, String>, edges:&Vec<(usize,usize)>)->HashMap<usize,Vec<usize>>{
+    let mut connections=HashMap::<usize,Vec<usize>>::new();
+    for (new_id,name) in nodes.into_iter(){
         for (from,to) in edges{
-            if new_id==from{
-                connections.entry(from).or_insert(Vec::new()).push(to)；
+            if new_id==*from{
+                connections.entry(*from).or_insert(Vec::new()).push(*to);
             }
         }
     }
@@ -44,14 +51,15 @@ fn popular_person(connections:HashMap<usize,Vec<usize>>, nodes:HashMap<usize, St
     let mut popular_id=0;
     for (id,neighbors) in connections{
         if neighbors.len()>max_connection{
-            popular_id=*id;
+            popular_id=id;
+            max_connection=neighbors.len();
         }
     }
     nodes.get(&popular_id).cloned().unwrap_or("Unknown".to_string())
 }
-fn 3_steps_bfs(graph:HashMap<usize,Vec<usize>>,start:String) -> Option<usize>{
-    let start_id = self.names_ids.iter()
-            .find(|(_, name)| name.contains(start_name))
+fn three_steps_bfs(graph:HashMap<usize,Vec<usize>>, nodes:HashMap<usize, String>, start:String, depth_threshold:usize) -> Option<usize>{
+    let start_id = nodes.iter()
+            .find(|(_, name)| name.contains(&start))
             .map(|(id, _)| *id);
     
     if let Some(id) = start_id {
@@ -61,15 +69,19 @@ fn 3_steps_bfs(graph:HashMap<usize,Vec<usize>>,start:String) -> Option<usize>{
         visited.insert(id);
         queue.push_back((id, 0)); 
         while let Some((current,depth))=queue.pop_front(){
-            if depth>=3{
+            if depth>=depth_threshold{
                 continue;
             }
             if let Some(neighbors)=graph.get(&current){
+                println!("{:?}", neighbors);
                 for &neighbor in neighbors{
                     if !visited.contains(&neighbor){
                         visited.insert(neighbor);
                         queue.push_back((neighbor,depth+1));
+                        println!("Queue added to");
+                        //println!("Count of visited so far: {}\n Neighbor name: {}", visited.len(), neighbor);
                     }
+
                 }
             }
         }
@@ -82,12 +94,14 @@ fn 3_steps_bfs(graph:HashMap<usize,Vec<usize>>,start:String) -> Option<usize>{
 
 
 fn main() {
-    let nodes = read_nodes("fb-pages-sport.nodes");
-    let edges = read_edges("fb-pages-sport.edges");
-    let connections = find_connections(nodes,edges);
-    let popular_person=popular_person(connections,nodes);
+    let nodes = read_nodes("fb-pages-sport_nodes.csv");
+    let edges = read_edges("fb-pages-sport_edges.csv");
+    let connections = find_connections(nodes.clone(),&edges);
+    let popular_person=popular_person(connections.clone(),nodes.clone());
     println!("The most popular person is {:?}",popular_person);
-    let reached=3_steps_bfs(connections, popular_person);
-    let 3_steps_ratio=reached/(connections.len());
-    println!("The proportion of the most popular person can reach in three steps is {:?}",3_steps_ratio);
+    let reached=three_steps_bfs(connections.clone(), nodes.clone(), popular_person, 3);
+    println!("{:?}", reached);
+    println!("{:?}", connections.len());
+    let three_steps_ratio: f64 =(reached.unwrap() as f64)/(connections.len() as f64);
+    println!("The proportion of the most popular person can reach in three steps is {:?}",three_steps_ratio);
 }
