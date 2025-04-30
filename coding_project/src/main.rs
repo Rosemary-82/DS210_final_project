@@ -9,12 +9,21 @@ fn read_nodes(filename: &str) -> HashMap<usize, String> {
     let mut rdr = Reader::from_reader(reader);
 
     let mut nodes = HashMap::new();
+    let mut name_counts = HashMap::new();
     for line in rdr.records() {
         let record = line.expect("Failed to read record");
-        let name = record[1].trim().to_string(); // fix: call to_string()
+        let base_name = record[1].trim().to_string(); 
         let new_id = record[2].trim().parse::<usize>().expect("Invalid new_id");
 
-        nodes.insert(new_id, name);
+        let count=name_counts.entry(base_name.clone()).or_insert(0);
+        *count+=1;
+        let unique_name = if *count == 1 {
+            base_name.clone()
+        } else {
+            format!("{}_{}", base_name, count)
+        };
+
+        nodes.insert(new_id, unique_name);
     }
     nodes
 }
@@ -73,12 +82,12 @@ fn three_steps_bfs(graph:HashMap<usize,Vec<usize>>, nodes:HashMap<usize, String>
                 continue;
             }
             if let Some(neighbors)=graph.get(&current){
-                println!("{:?}", neighbors);
+                //println!("{:?}", neighbors);
                 for &neighbor in neighbors{
                     if !visited.contains(&neighbor){
                         visited.insert(neighbor);
                         queue.push_back((neighbor,depth+1));
-                        println!("Queue added to");
+                        //println!("Queue added to");
                         //println!("Count of visited so far: {}\n Neighbor name: {}", visited.len(), neighbor);
                     }
 
@@ -102,6 +111,6 @@ fn main() {
     let reached=three_steps_bfs(connections.clone(), nodes.clone(), popular_person, 3);
     println!("{:?}", reached);
     println!("{:?}", connections.len());
-    let three_steps_ratio: f64 =(reached.unwrap() as f64)/(connections.len() as f64);
-    println!("The proportion of the most popular person can reach in three steps is {:?}",three_steps_ratio);
+    let three_steps_ratio: f64 =((reached.unwrap() as f64)/(connections.len() as f64)) * 100.0;
+    println!("The proportion of the most popular person can reach in three steps is {:.2} %",three_steps_ratio);
 }
